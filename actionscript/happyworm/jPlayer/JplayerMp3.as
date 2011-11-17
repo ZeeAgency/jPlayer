@@ -2,26 +2,25 @@
  * jPlayer Plugin for jQuery JavaScript Library
  * http://www.happyworm.com/jquery/jplayer
  *
- * Copyright (c) 2009 - 2011 Happyworm Ltd
+ * Copyright (c) 2009 - 2010 Happyworm Ltd
  * Dual licensed under the MIT and GPL licenses.
  *  - http://www.opensource.org/licenses/mit-license.php
  *  - http://www.gnu.org/copyleft/gpl.html
  *
  * Author: Mark J Panaghiston
- * Date: 1st September 2011
+ * Date: 20th December 2010
  */
 
 package happyworm.jPlayer {
 	import flash.display.Sprite;
-
+	import flash.errors.IOError;
+	import flash.events.*;
 	import flash.media.Sound;
 	import flash.media.SoundChannel;
 	import flash.media.SoundLoaderContext;
 	import flash.media.SoundTransform;
 	import flash.net.URLRequest;
 	import flash.utils.Timer;
-	import flash.errors.IOError;
-	import flash.events.*;
 
 	public class JplayerMp3 extends Sprite {
 		private var mySound:Sound = new Sound();
@@ -30,11 +29,13 @@ package happyworm.jPlayer {
 		private var myTransform:SoundTransform = new SoundTransform();
 		private var myRequest:URLRequest = new URLRequest();
 
-		private var timeUpdateTimer:Timer = new Timer(250, 0); // Matched to HTML event freq
-		private var progressTimer:Timer = new Timer(250, 0); // Matched to HTML event freq
-		private var seekingTimer:Timer = new Timer(100, 0); // Internal: How often seeking is checked to see if it is over.
+		private var timeUpdateTimer:Timer = new Timer(100, 0);
+		private var progressTimer:Timer = new Timer(100, 0);
+		private var seekingTimer:Timer = new Timer(100, 0);
 		
 		public var myStatus:JplayerStatus = new JplayerStatus();
+
+		private var eStat:eStatNativeFlashTag;
 
 		public function JplayerMp3(volume:Number) {
 			timeUpdateTimer.addEventListener(TimerEvent.TIMER, timeUpdateHandler);
@@ -42,8 +43,21 @@ package happyworm.jPlayer {
 			seekingTimer.addEventListener(TimerEvent.TIMER, seekingHandler);
 			setVolume(volume);
 		}
+		
+		public function startStat(serial:String, name:String, mediaURL:String):void
+		{
+			//eStatSendEvent(eStatNativeFlashTag.ESTAT_PLAYING_EVENT, cursor_position:Number):void
+			eStat = new eStatNativeFlashTag(serial,"flash");
+			eStat.eStatSetMediaName(name);
+			eStat.eStatSetMediaUrl(mediaURL);
+			eStat.eStatSetMediaSection1("Web");
+			eStat.eStatSetMediaSection2("flash");
+		}
+		
+		
 		public function setFile(src:String):void {
 			this.dispatchEvent(new JplayerEvent(JplayerEvent.DEBUG_MSG, myStatus, "setFile: " + src));
+			
 			if(myStatus.isPlaying) {
 				myChannel.stop();
 				progressUpdates(false);
@@ -70,10 +84,6 @@ package happyworm.jPlayer {
 			myStatus.srcSet = false;
 		}
 		private function errorHandler(err:IOErrorEvent):void {
-			// MP3 player needs to stop progress and timeupdate events as they are started before the error occurs.
-			// NB: The MP4 player works differently and the error occurs before they are started.
-			progressUpdates(false);
-			timeUpdates(false);
 			myStatus.error(); // Resets status except the src, and it sets srcError property.
 			this.dispatchEvent(new JplayerEvent(JplayerEvent.JPLAYER_ERROR, myStatus));
 		}
@@ -179,7 +189,9 @@ package happyworm.jPlayer {
 		}
 		public function play(time:Number = NaN):Boolean {
 			var wasPlaying:Boolean = myStatus.isPlaying;
-
+			
+			
+			
 			if(!isNaN(time) && myStatus.srcSet) {
 				if(myStatus.isPlaying) {
 					myChannel.stop();
@@ -213,6 +225,7 @@ package happyworm.jPlayer {
 					timeUpdates(true);
 					if(!wasPlaying) {
 						this.dispatchEvent(new JplayerEvent(JplayerEvent.JPLAYER_PLAY, myStatus));
+						eStat.eStatSendEvent(eStatNativeFlashTag.ESTAT_PLAYING_EVENT);
 					}
 				}
 				return true;
@@ -221,16 +234,13 @@ package happyworm.jPlayer {
 			}
 		}
 		public function pause(time:Number = NaN):Boolean {
+			
+			
+			
 			myStatus.playOnLoad = false; // Reset flag in case load/play issued immediately before this command, ie., before loadOpen() event.
 			myStatus.playOnSeek = false; // Reset flag in case play(time) issued before the command and is still seeking to time set.
 
 			var wasPlaying:Boolean = myStatus.isPlaying;
-
-			// To avoid possible loops with timeupdate and pause(time). A pause() does not have the problem.
-			var alreadyPausedAtTime:Boolean = false;
-			if(!isNaN(time) && myStatus.pausePosition == time) {
-				alreadyPausedAtTime = true;
-			}
 
 			if(myStatus.isPlaying) {
 				myStatus.isPlaying = false;
@@ -263,11 +273,8 @@ package happyworm.jPlayer {
 					seeking(true);
 				}
 				timeUpdates(false);
-				// Need to be careful with timeupdate event, otherwise a pause in a timeupdate event can cause a loop.
-				// Neither pause() nor pause(time) will cause a timeupdate loop.
-				if(wasPlaying || !isNaN(time) && !alreadyPausedAtTime) {
-					timeUpdateEvent();
-				}
+				
+				timeUpdateEvent();
 				return true;
 			} else {
 				return false;
@@ -282,6 +289,18 @@ package happyworm.jPlayer {
 			}
 		}
 		public function setVolume(v:Number):void {
+			
+			if(eStat)
+			{
+				if(v == 0)
+				{
+					eStat.eStatSendEvent(eStatNativeFlashTag.ESTAT_PAUSED_EVENT);
+				}
+				else if(myTransform.volume == 0)
+				{
+					eStat.eStatSendEvent(eStatNativeFlashTag.ESTAT_PLAYING_EVENT);
+				}
+			}
 			myStatus.volume = v;
 			myTransform.volume = v;
 			myChannel.soundTransform = myTransform;

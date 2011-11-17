@@ -2,49 +2,38 @@
  * jPlayer Plugin for jQuery JavaScript Library
  * http://www.happyworm.com/jquery/jplayer
  *
- * Copyright (c) 2009 - 2011 Happyworm Ltd
+ * Copyright (c) 2009 - 2010 Happyworm Ltd
  * Dual licensed under the MIT and GPL licenses.
  *  - http://www.opensource.org/licenses/mit-license.php
  *  - http://www.gnu.org/copyleft/gpl.html
  *
  * Author: Mark J Panaghiston
- * Version: 2.1.0
- * Date: 1st September 2011
+ * Version: 2.0.0
+ * Date: 20th December 2010
  *
  * FlashVars expected: (AS3 property of: loaderInfo.parameters)
- *	id: 	(URL Encoded: String) Id of jPlayer instance
+ *	id: 	(URL Encoded) Id of jPlayer instance
  *	vol:	(Number) Sets the initial volume
- *	muted:	(Boolean in a String) Sets the initial muted state
- *	jQuery:	(URL Encoded: String) Sets the jQuery var name. Used with: someVar = jQuery.noConflict(true);
+ *	muted:	(Boolean) Sets the initial muted state
  *
- * Compiled using: Adobe Flex Compiler (mxmlc) Version 4.5.1 build 21328
+ * Compiled using: Adobe Flash CS4 Professional
+ * Jplayer.fla
  */
 
 package {
-	import flash.system.Security;
-	import flash.external.ExternalInterface;
-
-	import flash.utils.Timer;
-	import flash.events.TimerEvent;
-	
-	import flash.text.TextField;
-	import flash.text.TextFormat;
-
-	import flash.events.KeyboardEvent;
-
 	import flash.display.Sprite;
-	import happyworm.jPlayer.*;
-
 	import flash.display.StageAlign;
 	import flash.display.StageScaleMode;
 	import flash.events.Event;
-	import flash.events.MouseEvent;
-
-	import flash.ui.ContextMenu;
-	import flash.ui.ContextMenuItem;
-	import flash.events.ContextMenuEvent;
-	import flash.net.URLRequest;
-	import flash.net.navigateToURL;
+	import flash.events.KeyboardEvent;
+	import flash.events.TimerEvent;
+	import flash.external.ExternalInterface;
+	import flash.system.Security;
+	import flash.text.TextField;
+	import flash.text.TextFormat;
+	import flash.utils.Timer;
+	
+	import happyworm.jPlayer.*;
 
 	public class Jplayer extends Sprite {
 		private var jQuery:String;
@@ -66,14 +55,14 @@ package {
 		public function Jplayer() {
 			flash.system.Security.allowDomain("*");
 
-			jQuery = loaderInfo.parameters.jQuery + "('#" + loaderInfo.parameters.id + "').jPlayer";
+			jQuery = "jQuery('#" + loaderInfo.parameters.id + "').jPlayer";
 			commonStatus.volume = Number(loaderInfo.parameters.vol);
+			commonStatus.muted = Boolean(loaderInfo.parameters.muted);
 			commonStatus.muted = loaderInfo.parameters.muted == "true";
 
 			stage.scaleMode = StageScaleMode.NO_SCALE;
 			stage.align = StageAlign.TOP_LEFT;
 			stage.addEventListener(Event.RESIZE, resizeHandler);
-			stage.addEventListener(MouseEvent.CLICK, clickHandler);
 
 			var initialVolume:Number = commonStatus.volume;
 			if(commonStatus.muted) {
@@ -81,25 +70,12 @@ package {
 			}
 			myMp3Player = new JplayerMp3(initialVolume);
 			addChild(myMp3Player);
-
+			
 			myMp4Player = new JplayerMp4(initialVolume);
 			addChild(myMp4Player);
 
 			setupListeners(!isMp3, isMp3); // Set up the listeners to the default isMp3 state.
-
-			// The ContextMenu only partially works. The menu select events never occur.
-			// Investigated and it is something to do with the way jPlayer inserts the Flash on the page.
-			// A simple test inserting the Jplayer.swf on a page using: 1) SWFObject 2.2 works. 2) AC_FL_RunContent() works.
-			// jPlayer Flash insertion is based on SWFObject 2.2 and the resaon behind this failure is not clear. The Flash insertion HTML on the page looks similar.
-			var myContextMenu:ContextMenu = new ContextMenu();
-			myContextMenu.hideBuiltInItems();
-			var menuItem_jPlayer:ContextMenuItem = new ContextMenuItem("jPlayer " + JplayerStatus.VERSION);
-			var menuItem_happyworm:ContextMenuItem = new ContextMenuItem("© 2009-2011 Happyworm Ltd", true);
-			menuItem_jPlayer.addEventListener(ContextMenuEvent.MENU_ITEM_SELECT, menuSelectHandler_jPlayer);
-			menuItem_happyworm.addEventListener(ContextMenuEvent.MENU_ITEM_SELECT, menuSelectHandler_happyworm);
-			myContextMenu.customItems.push(menuItem_jPlayer, menuItem_happyworm);
-			contextMenu = myContextMenu;
-
+			
 			// Log console for dev compile option: debug
 			if(debug) {
 				txLog = new TextField();
@@ -128,6 +104,16 @@ package {
 		private function init(e:TimerEvent):void {
 			myInitTimer.stop();
 			if(ExternalInterface.available) {
+				
+				var eStatSerial : String = this.loaderInfo.parameters["eStatSerial"];
+				var eStatName : String = this.loaderInfo.parameters["eStatName"];
+				var mediaURL : String = this.loaderInfo.parameters["mediaURL"];
+				
+				if(myMp3Player)
+				{
+					myMp3Player.startStat(eStatSerial, eStatName, mediaURL);
+				}
+				
 				ExternalInterface.addCallback("fl_setAudio_mp3", fl_setAudio_mp3);
 				ExternalInterface.addCallback("fl_setAudio_m4a", fl_setAudio_m4a);
 				ExternalInterface.addCallback("fl_setVideo_m4v", fl_setVideo_m4v);
@@ -140,6 +126,8 @@ package {
 				ExternalInterface.addCallback("fl_mute", fl_mute);
 
 				ExternalInterface.call(jQuery, "jPlayerFlashEvent", JplayerEvent.JPLAYER_READY, extractStatusData(commonStatus)); // See JplayerStatus() class for version number.
+				
+				
 			}
 		}
 		private function setupListeners(oldMP3:Boolean, newMP3:Boolean):void {
@@ -316,7 +304,7 @@ package {
 			}
 		}
 		private function extractStatusData(data:JplayerStatus):Object {
-			var myStatus:Object = {
+			var myStatus = {
 				version: JplayerStatus.VERSION,
 				src: data.src,
 				paused: !data.isPlaying, // Changing this name requires inverting all assignments and conditional statements.
@@ -374,22 +362,7 @@ package {
 			entity.width = mediaWidth;
 			entity.height = mediaHeight;
 		}
-		private function clickHandler(e:MouseEvent):void {
-			if(isMp3) {
-				jPlayerFlashEvent(new JplayerEvent(JplayerEvent.JPLAYER_CLICK, myMp3Player.myStatus, "click"))
-			} else {
-				jPlayerFlashEvent(new JplayerEvent(JplayerEvent.JPLAYER_CLICK, myMp4Player.myStatus, "click"))
-			}
-		}
-		// This event is never called. See comments in class constructor.
-		private function menuSelectHandler_jPlayer(e:ContextMenuEvent):void {
-			navigateToURL(new URLRequest("http://jplayer.org/"), "_blank");
-		}
-		// This event is never called. See comments in class constructor.
-		private function menuSelectHandler_happyworm(e:ContextMenuEvent):void {
-			navigateToURL(new URLRequest("http://happyworm.com/"), "_blank");
-		}
-		private function log(t:String):void {
+		private function log(t):void {
 			if(debug) {
 				txLog.text = t + "\n" + txLog.text;
 			}

@@ -2,13 +2,13 @@
  * jPlayer Plugin for jQuery JavaScript Library
  * http://www.happyworm.com/jquery/jplayer
  *
- * Copyright (c) 2009 - 2011 Happyworm Ltd
+ * Copyright (c) 2009 - 2010 Happyworm Ltd
  * Dual licensed under the MIT and GPL licenses.
  *  - http://www.opensource.org/licenses/mit-license.php
  *  - http://www.gnu.org/copyleft/gpl.html
  *
  * Author: Mark J Panaghiston
- * Date: 7th August 2011
+ * Date: 20th December 2010
  */
 
 package happyworm.jPlayer {
@@ -36,15 +36,14 @@ package happyworm.jPlayer {
 
 		public var myStatus:JplayerStatus = new JplayerStatus();
 		
-		private var timeUpdateTimer:Timer = new Timer(250, 0); // Matched to HTML event freq
-		private var progressTimer:Timer = new Timer(250, 0); // Matched to HTML event freq
-		private var seekingTimer:Timer = new Timer(100, 0); // Internal: How often seeking is checked to see if it is over.
+		private var timeUpdateTimer:Timer = new Timer(100, 0);
+		private var progressTimer:Timer = new Timer(100, 0);
+		private var seekingTimer:Timer = new Timer(100, 0);
 
 		public function JplayerMp4(volume:Number) {
 			myConnection = new NetConnection();
 			myConnection.addEventListener(NetStatusEvent.NET_STATUS, netStatusHandler);
 			myConnection.addEventListener(SecurityErrorEvent.SECURITY_ERROR, securityErrorHandler);
-			myVideo.smoothing = true;
 			this.addChild(myVideo);
 			
 			timeUpdateTimer.addEventListener(TimerEvent.TIMER, timeUpdateHandler);
@@ -263,12 +262,6 @@ package happyworm.jPlayer {
 
 			var wasPlaying:Boolean = myStatus.isPlaying;
 
-			// To avoid possible loops with timeupdate and pause(time). A pause() does not have the problem.
-			var alreadyPausedAtTime:Boolean = false;
-			if(!isNaN(time) && myStatus.pausePosition == time) {
-				alreadyPausedAtTime = true;
-			}
-
 			// Need to wait for metadata to load before ever issuing a pause. The metadata handler will call this function if needed, when ready.
 			if(myStream != null && myStatus.metaDataReady) { // myStream is a null until the 1st media is loaded. ie., The 1st ever setMedia being followed by a pause() or pause(t).
 				myStream.pause();
@@ -309,11 +302,7 @@ package happyworm.jPlayer {
 					}
 				}
 				timeUpdates(false);
-				// Need to be careful with timeupdate event, otherwise a pause in a timeupdate event can cause a loop.
-				// Neither pause() nor pause(time) will cause a timeupdate loop.
-				if(wasPlaying || !isNaN(time) && !alreadyPausedAtTime) {
-					timeUpdateEvent();
-				}
+				timeUpdateEvent();
 				return true;
 			} else {
 				return false;
